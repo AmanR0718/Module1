@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: zambian_farmer_backend_prod
+    restart: always
+    environment:
+      MONGODB_URL: ${MONGODB_URL}
+      MONGODB_DB_NAME: ${MONGODB_DB_NAME}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      AES_ENCRYPTION_KEY: ${AES_ENCRYPTION_KEY}
+      DEBUG: "False"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/uploads:/app/uploads
+    networks:
+      - farmer_network
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
+
+  nginx:
+    image: nginx:alpine
+    container_name: zambian_farmer_nginx_prod
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./backend/uploads:/usr/share/nginx/html/uploads:ro
+    depends_on:
+      - backend
+    networks:
+      - farmer_network
+
+networks:
+  farmer_network:
+    driver: bridge

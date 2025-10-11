@@ -1,0 +1,92 @@
+version: '3.8'
+
+services:
+  # MongoDB Database
+  mongodb:
+    image: mongo:7.0
+    container_name: zambian_farmer_mongodb
+    restart: always
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-password123}
+      MONGO_INITDB_DATABASE: zambian_farmers
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+      - ./mongo-init:/docker-entrypoint-initdb.d
+    networks:
+      - farmer_network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # FastAPI Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: zambian_farmer_backend
+    restart: always
+    environment:
+      MONGODB_URL: mongodb://admin:${MONGO_PASSWORD:-password123}@mongodb:27017/
+      MONGODB_DB_NAME: zambian_farmers
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-your-super-secret-key-change-in-production}
+      JWT_ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 30
+      AES_ENCRYPTION_KEY: ${AES_KEY:-your-32-byte-encryption-key-here!!}
+      DEBUG: ${DEBUG:-True}
+      ALLOWED_ORIGINS: http://localhost:3000,http://localhost:19006
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/uploads:/app/uploads
+      - ./backend/app:/app/app
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - farmer_network
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: zambian_farmer_nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./backend/uploads:/usr/share/nginx/html/uploads:ro
+    depends_on:
+      - backend
+    networks:
+      - farmer_network
+
+  # Redis Cache (Optional - for performance)
+  redis:
+    image: redis:alpine
+    container_name: zambian_farmer_redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - farmer_network
+    command: redis-server --appendonly yes
+
+volumes:
+  mongodb_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  farmer_network:
+    driver: bridge
