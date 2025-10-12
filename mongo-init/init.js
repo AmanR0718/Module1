@@ -1,13 +1,46 @@
-// MongoDB initialization script
 db = db.getSiblingDB('zambian_farmers');
 
-// Create collections
-db.createCollection('farmers');
-db.createCollection('users');
-db.createCollection('chiefs');
-db.createCollection('inventory');
+print('📊 Creating collections...');
 
-// Create indexes
+// Create collections if they don't exist
+try {
+    db.createCollection('farmers');
+    print('✅ farmers collection created');
+} catch (e) {
+    print('⚠️  farmers collection already exists');
+}
+
+try {
+    db.createCollection('users');
+    print('✅ users collection created');
+} catch (e) {
+    print('⚠️  users collection already exists');
+}
+
+try {
+    db.createCollection('chiefs');
+    print('✅ chiefs collection created');
+} catch (e) {
+    print('⚠️  chiefs collection already exists');
+}
+
+try {
+    db.createCollection('inventory');
+    print('✅ inventory collection created');
+} catch (e) {
+    print('⚠️  inventory collection already exists');
+}
+
+print('📍 Creating indexes...');
+
+// Drop existing indexes first (optional)
+try {
+    db.farmers.collection.dropIndexes();
+} catch (e) {
+    print('No indexes to drop');
+}
+
+// Create new indexes
 db.farmers.createIndex({ "farmer_id": 1 }, { unique: true });
 db.farmers.createIndex({ "nrc_number": 1 }, { unique: true });
 db.farmers.createIndex({ "personal_info.phone_primary": 1 });
@@ -22,49 +55,29 @@ db.users.createIndex({ "role": 1 });
 db.chiefs.createIndex({ "province": 1, "district": 1 });
 db.chiefs.createIndex({ "chief_name": 1 });
 
-print('✅ MongoDB initialized successfully');
+print('✅ Indexes created');
 
-// Insert sample admin user (password: admin123)
-db.users.insertOne({
-    email: "admin@zambian-farmers.zm",
-    full_name: "System Administrator",
-    role: "admin",
-    is_active: true,
-    hashed_password: "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5PqjM4T.GdqYu",
-    assigned_provinces: [],
-    assigned_districts: [],
-    created_at: new Date(),
-    updated_at: new Date()
-});
+print('👤 Creating admin user...');
 
-// Insert sample chiefs data (Central Province example)
-db.chiefs.insertMany([
+// Insert admin user with proper password hash
+db.users.updateOne(
+    { email: "admin@zambian-farmers.zm" },
     {
-        chief_name: "Chief Chitanda",
-        tribal_affiliation: "Lenje",
-        province: "Central",
-        district: "Chibombo",
-        chiefdom: "Chitanda",
-        phone: "+260-97-1234567",
-        email: "chief.chitanda@zambia.zm",
-        jurisdiction_boundaries: {},
-        palace_location: {
-            type: "Point",
-            coordinates: [28.4333, -14.7167]
+        $set: {
+            email: "admin@zambian-farmers.zm",
+            full_name: "System Administrator",
+            role: "admin",
+            is_active: true,
+            hashed_password: "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5PqjM4T.GdqYu",
+            assigned_provinces: [],
+            assigned_districts: [],
+            created_at: new Date(),
+            updated_at: new Date()
         }
     },
-    {
-        chief_name: "Chief Liteta",
-        tribal_affiliation: "Lenje",
-        province: "Central",
-        district: "Kabwe",
-        chiefdom: "Liteta",
-        phone: "+260-97-2345678",
-        palace_location: {
-            type: "Point",
-            coordinates: [28.4467, -14.4464]
-        }
-    }
-]);
+    { upsert: true }
+);
 
-print('✅ Sample data inserted');
+print('✅ Admin user ready');
+
+print('🎉 Database initialization complete!');

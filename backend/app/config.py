@@ -9,24 +9,29 @@ class Settings(BaseSettings):
     DEBUG: bool = True
     
     # MongoDB
-    MONGODB_URL: str = "mongodb://admin:password123@mongodb:27017/"
+    MONGODB_URL: str = "mongodb://admin:Admin123@mongodb:27017/"
     MONGODB_DB_NAME: str = "zambian_farmers"
     
     # JWT
-    JWT_SECRET_KEY: str = "your-super-secret-key-change-in-production"
+    JWT_SECRET_KEY: str = "YourSuperSecureJWTKeyForZambianFarmersSystem2025"
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     
     # Security
-    AES_ENCRYPTION_KEY: str = "your-32-byte-encryption-key-here!!"
+    AES_ENCRYPTION_KEY: str = "YourAES256EncryptionKeyForSensitiveData2025"
     
     # CORS
-    ALLOWED_ORIGINS: List[str] = [
+    ALLOWED_ORIGINS: List[str] = Field(
+    default=[
         "http://localhost:3000",
         "http://localhost:19006",
-        "exp://192.168.1.1:19000"
+        "http://localhost:8000",
+        "http://10.169.131.102:3000",
+        "http://10.169.131.102:19006",
+        "http://10.169.131.102:8000",
     ]
+)
     
     # File Upload
     MAX_UPLOAD_SIZE_MB: int = 10
