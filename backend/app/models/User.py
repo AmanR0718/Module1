@@ -27,10 +27,14 @@ class UserUpdate(BaseModel):
     assigned_districts: Optional[List[str]] = None
 
 class UserInDB(UserBase):
-    id: str = Field(alias="_id")
+    id: Optional[str] = Field(default=None, alias="_id")
     hashed_password: str
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    
+    class Config:
+        populate_by_name = True
+
     
     class Config:
         populate_by_name = True

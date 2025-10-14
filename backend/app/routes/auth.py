@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from datetime import datetime
+from motor.motor_asyncio import AsyncIOMotorDatabase
 from app.models.user import UserCreate, User, Token, UserInDB, UserRole
 from app.utils.security import (
     get_password_hash,
@@ -14,25 +15,46 @@ from app.database import get_database
 router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
 
-async def get_current_user(token: str = Depends(oauth2_scheme)) -> UserInDB:
+
+async def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    db: AsyncIOMotorDatabase = Depends(get_database)
+) -> UserInDB:
     """Get current authenticated user"""
-    token_data = decode_token(token)
-    db = get_database()
-    user = await db.users.find_one({"email": token_data.email})
-    
-    if user is None:
+    try:
+        token_data = decode_token(token)
+        email = token_data.get("sub")  # Fixed: dict access
+        
+        if email is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Could not validate credentials"
+            )
+        
+        user = await db.users.find_one({"email": email})
+        
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found"
+            )
+        
+        return UserInDB(**user)
+    except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found"
+            detail="Could not validate credentials"
         )
-    
-    return UserInDB(**user)
 
-async def get_current_active_user(current_user: UserInDB = Depends(get_current_user)) -> UserInDB:
+
+async def get_current_active_user(
+    current_user: UserInDB = Depends(get_current_user)
+) -> UserInDB:
     """Get current active user"""
     if not current_user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
     return current_user
+
 
 def require_role(allowed_roles: list):
     """Dependency to check user role"""
@@ -45,11 +67,13 @@ def require_role(allowed_roles: list):
         return current_user
     return role_checker
 
-@router.post("/register", response_model=User)
-async def register_user(user: UserCreate):
+
+@router.post("/register", response_model=User, status_code=status.HTTP_201_CREATED)
+async def register_user(
+    user: UserCreate,
+    db: AsyncIOMotorDatabase = Depends(get_database)
+):
     """Register new user (Admin only in production)"""
-    db = get_database()
-    
     # Check if user already exists
     existing_user = await db.users.find_one({"email": user.email})
     if existing_user:
@@ -65,6 +89,7 @@ async def register_user(user: UserCreate):
     user_dict = user.dict(exclude={"password"})
     user_dict.update({
         "hashed_password": hashed_password,
+        "is_active": True,  # Added default value
         "created_at": datetime.utcnow(),
         "updated_at": datetime.utcnow()
     })
@@ -75,14 +100,27 @@ async def register_user(user: UserCreate):
     
     return User(**user_dict)
 
+
 @router.post("/login", response_model=Token)
-async def login(form_data: OAuth2PasswordRequestForm = Depends()):
+async def login(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: AsyncIOMotorDatabase = Depends(get_database)
+):
     """Login and get access token"""
-    db = get_database()
-    
     # Find user
     user = await db.users.find_one({"email": form_data.username})
-    if not user or not verify_password(form_data.password, user["hashed_password"]):
+    
+    # Fixed: Safe access to hashed_password
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    # Check if hashed_password exists and verify
+    hashed_pwd = user.get("hashed_password")
+    if not hashed_pwd or not verify_password(form_data.password, hashed_pwd):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
@@ -98,10 +136,18 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     
     # Create tokens
     access_token = create_access_token(
-        data={"sub": user["email"], "role": user["role"]}
+        data={
+            "sub": user["email"],
+            "role": user["role"],
+            "user_id": str(user["_id"])
+        }
     )
     refresh_token = create_refresh_token(
-        data={"sub": user["email"], "role": user["role"]}
+        data={
+            "sub": user["email"],
+            "role": user["role"],
+            "user_id": str(user["_id"])
+        }
     )
     
     return {
@@ -110,26 +156,65 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
         "token_type": "bearer"
     }
 
+
 @router.get("/me", response_model=User)
-async def get_current_user_info(current_user: UserInDB = Depends(get_current_active_user)):
+async def get_current_user_info(
+    current_user: UserInDB = Depends(get_current_active_user)
+):
     """Get current user information"""
     return current_user
 
+
 @router.post("/refresh", response_model=Token)
-async def refresh_token(refresh_token: str):
+async def refresh_token_endpoint(
+    refresh_token: str,
+    db: AsyncIOMotorDatabase = Depends(get_database)
+):
     """Refresh access token"""
-    token_data = decode_token(refresh_token)
-    
-    # Create new tokens
-    access_token = create_access_token(
-        data={"sub": token_data.email, "role": token_data.role}
-    )
-    new_refresh_token = create_refresh_token(
-        data={"sub": token_data.email, "role": token_data.role}
-    )
-    
-    return {
-        "access_token": access_token,
-        "refresh_token": new_refresh_token,
-        "token_type": "bearer"
-    }
+    try:
+        token_data = decode_token(refresh_token)
+        
+        # Fixed: dict access
+        email = token_data.get("sub")
+        role = token_data.get("role")
+        
+        if not email:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token"
+            )
+        
+        # Verify user still exists
+        user = await db.users.find_one({"email": email})
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found"
+            )
+        
+        # Create new tokens
+        access_token = create_access_token(
+            data={
+                "sub": email,
+                "role": role,
+                "user_id": str(user["_id"])
+            }
+        )
+        new_refresh_token = create_refresh_token(
+            data={
+                "sub": email,
+                "role": role,
+                "user_id": str(user["_id"])
+            }
+        )
+        
+        return {
+            "access_token": access_token,
+            "refresh_token": new_refresh_token,
+            "token_type": "bearer"
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not refresh token"
+        )

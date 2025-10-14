@@ -1,4 +1,3 @@
-version: '3.8'
 
 services:
   # ============================================
@@ -43,7 +42,7 @@ services:
       ACCESS_TOKEN_EXPIRE_MINUTES: 30
       AES_ENCRYPTION_KEY: YourAES256EncryptionKeyForSensitiveData2025
       DEBUG: "True"
-      ALLOWED_ORIGINS: "http://localhost:3000,http://localhost:19006,http://localhost:8000,http://10.169.131.102:3000,http://10.169.131.102:19006,http://10.169.131.102:8000"
+      ALLOWED_ORIGINS: '["http://localhost:3000","http://localhost:19006","http://localhost:8000","http://10.169.131.102:3000","http://10.169.131.102:19006","http://10.169.131.102:8000"]'
     ports:
       - "8000:8000"
     volumes:
