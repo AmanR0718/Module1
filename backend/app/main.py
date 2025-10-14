@@ -43,13 +43,7 @@ async def add_process_time_header(request: Request, call_next):
     response.headers["X-Process-Time"] = str(process_time)
     return response
 
-# Exception handler
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    return JSONResponse(
-        status_code=500,
-        content={"detail": str(exc), "message": "Internal server error"}
-    )
+
 
 # Routes
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])

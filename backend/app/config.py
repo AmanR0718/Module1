@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings
 from pydantic import field_validator
+from pydantic import Field
 from typing import List, Union
 import os
 
