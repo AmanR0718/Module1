@@ -6,9 +6,12 @@ import {
     TouchableOpacity,
     StyleSheet,
     ActivityIndicator,
-    RefreshControl
+    RefreshControl,
+    Alert,
 } from 'react-native';
-import { getAllFarmersWithStats } from '../services/database';
+import * as Network from 'expo-network';
+import { getAllFarmersWithStats, saveFarmerOffline } from '../services/database';
+import { getAllFarmersFromAPI } from '../services/api';
 
 const FarmerListScreen = ({ navigation }) => {
     const [farmers, setFarmers] = useState([]);
@@ -19,25 +22,67 @@ const FarmerListScreen = ({ navigation }) => {
         loadFarmers();
     }, []);
 
+    // ============================================================
+    // 🔹 LOAD FARMERS (online preferred, offline fallback)
+    // ============================================================
     const loadFarmers = async () => {
+        setLoading(true);
         try {
-            // For now, load from local database
-            // In production, fetch from API when online
-            const data = await getAllFarmersWithStats();
+            const network = await Network.getNetworkStateAsync();
+            let data = [];
+
+            if (network.isConnected) {
+                // 🌐 Fetch from API
+                const apiFarmers = await getAllFarmersFromAPI();
+
+                // Cache to local DB for offline use
+                for (const farmer of apiFarmers) {
+                    await saveFarmerOffline({
+                        farmer_id: farmer.farmer_id,
+                        first_name: farmer.personal_info?.first_name || '',
+                        last_name: farmer.personal_info?.last_name || '',
+                        phone_primary: farmer.personal_info?.phone_primary || '',
+                        province: farmer.address?.province || '',
+                        district: farmer.address?.district || '',
+                        sync_status: 'synced',
+                    });
+                }
+
+                data = apiFarmers.map((f) => ({
+                    id: f._id || f.farmer_id,
+                    first_name: f.personal_info?.first_name,
+                    last_name: f.personal_info?.last_name,
+                    phone_primary: f.personal_info?.phone_primary,
+                    province: f.address?.province,
+                    district: f.address?.district,
+                    sync_status: 'synced',
+                }));
+            } else {
+                // 📦 Offline: Load from SQLite
+                data = await getAllFarmersWithStats();
+            }
+
             setFarmers(data);
         } catch (error) {
             console.error('Error loading farmers:', error);
+            Alert.alert('Error', 'Failed to load farmers.');
         } finally {
             setLoading(false);
         }
     };
 
+    // ============================================================
+    // 🔹 REFRESH HANDLER
+    // ============================================================
     const onRefresh = async () => {
         setRefreshing(true);
         await loadFarmers();
         setRefreshing(false);
     };
 
+    // ============================================================
+    // 🔹 RENDER SINGLE FARMER CARD
+    // ============================================================
     const renderFarmerItem = ({ item }) => (
         <TouchableOpacity
             style={styles.farmerCard}
@@ -54,16 +99,21 @@ const FarmerListScreen = ({ navigation }) => {
             </View>
 
             <View style={styles.statusBadge}>
-                <Text style={[
-                    styles.statusText,
-                    item.sync_status === 'synced' ? styles.syncedStatus : styles.pendingStatus
-                ]}>
+                <Text
+                    style={[
+                        styles.statusText,
+                        item.sync_status === 'synced' ? styles.syncedStatus : styles.pendingStatus,
+                    ]}
+                >
                     {item.sync_status === 'synced' ? '✓ Synced' : '⏳ Pending'}
                 </Text>
             </View>
         </TouchableOpacity>
     );
 
+    // ============================================================
+    // 🔹 LOADING VIEW
+    // ============================================================
     if (loading) {
         return (
             <View style={styles.centerContainer}>
@@ -72,6 +122,9 @@ const FarmerListScreen = ({ navigation }) => {
         );
     }
 
+    // ============================================================
+    // 🔹 MAIN RENDER
+    // ============================================================
     return (
         <View style={styles.container}>
             <FlatList
@@ -91,6 +144,9 @@ const FarmerListScreen = ({ navigation }) => {
     );
 };
 
+// ============================================================
+// 🔹 STYLES
+// ============================================================
 const styles = StyleSheet.create({
     container: {
         flex: 1,

@@ -1,40 +1,53 @@
-# FastAPI and ASGI Server
+# ============================================
+# CORE FRAMEWORK
+# ============================================
 fastapi==0.115.0
 uvicorn[standard]==0.32.0
 
-# MongoDB - IMPORTANT: Use compatible versions
-motor==3.6.0
-pymongo==4.9.1
+# ============================================
+# DATABASE (MongoDB)
+# ============================================
+motor==3.6.0          # Async MongoDB driver
+pymongo==4.9.1        # Required by Motor
 
-# Authentication & Security
+# ============================================
+# AUTHENTICATION & SECURITY
+# ============================================
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 python-multipart==0.0.12
 bcrypt==4.1.2
 
-# Validation & Settings
+# ============================================
+# VALIDATION & SETTINGS
+# ============================================
 pydantic==2.9.2
 pydantic-settings==2.6.0
 email-validator==2.2.0
-
-# Utilities
 python-dotenv==1.0.1
+
+# ============================================
+# UTILITIES
+# ============================================
 qrcode==8.0
 pillow==11.0.0
+aiofiles==23.2.1
 
-# PDF Generation
-reportlab==4.2.5
+# ============================================
+# FILES & EXPORTS
+# ============================================
+reportlab==4.2.5      # PDF generation
+openpyxl==3.1.5       # Excel export
 
-# Excel Processing
-openpyxl==3.1.5
-
-# Background Tasks & Scheduling (optional)
+# ============================================
+# BACKGROUND TASKS / CACHING
+# ============================================
 celery==5.4.0
 redis==5.2.0
 
-# Testing (optional)
+# ============================================
+# TESTING
+# ============================================
 pytest==8.3.3
 pytest-asyncio==0.24.0
 httpx==0.27.2
-
-aiofiles==23.2.1

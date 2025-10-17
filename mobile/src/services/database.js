@@ -1,12 +1,19 @@
-import * as SQLite from 'expo-sqlite';
+// ============================================
+// File: mobile/src/services/database.js
+// Local SQLite database for offline farmers
+// ============================================
 
-const db = SQLite.openDatabase('zambian_farmers.db');
+import * as SQLite from "expo-sqlite";
 
-// Initialize database
+const db = SQLite.openDatabase("zambian_farmers.db");
+
+/**
+ * ✅ Initialize all required tables
+ */
 export const initDatabase = () => {
     return new Promise((resolve, reject) => {
-        db.transaction(tx => {
-            // Farmers table
+        db.transaction((tx) => {
+            // Farmers
             tx.executeSql(
                 `CREATE TABLE IF NOT EXISTS farmers (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -32,7 +39,7 @@ export const initDatabase = () => {
         );`
             );
 
-            // Land parcels table
+            // Land Parcels
             tx.executeSql(
                 `CREATE TABLE IF NOT EXISTS land_parcels (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -48,7 +55,7 @@ export const initDatabase = () => {
         );`
             );
 
-            // Crops table
+            // Crops
             tx.executeSql(
                 `CREATE TABLE IF NOT EXISTS crops (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -65,7 +72,7 @@ export const initDatabase = () => {
         );`
             );
 
-            // Documents table
+            // Documents
             tx.executeSql(
                 `CREATE TABLE IF NOT EXISTS documents (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -76,53 +83,60 @@ export const initDatabase = () => {
           FOREIGN KEY (temp_farmer_id) REFERENCES farmers (temp_id)
         );`
             );
-
-            console.log('✅ Database initialized');
-            resolve();
-        }, reject);
+        },
+            reject,
+            () => {
+                console.log("✅ SQLite database initialized successfully.");
+                resolve(true);
+            });
     });
 };
 
-// Insert farmer
-export const insertFarmer = (farmerData) => {
+// ============================================
+// 🔹 FARMER CRUD OPERATIONS
+// ============================================
+
+export const insertFarmer = (farmer) => {
     return new Promise((resolve, reject) => {
-        db.transaction(tx => {
+        db.transaction((tx) => {
             tx.executeSql(
-                `INSERT INTO farmers (
+                `INSERT OR REPLACE INTO farmers (
           temp_id, nrc_number, first_name, last_name, phone_primary,
           phone_alternate, email, date_of_birth, gender, province,
           district, village, chiefdom, latitude, longitude
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
                 [
-                    farmerData.temp_id,
-                    farmerData.nrc_number,
-                    farmerData.first_name,
-                    farmerData.last_name,
-                    farmerData.phone_primary,
-                    farmerData.phone_alternate,
-                    farmerData.email,
-                    farmerData.date_of_birth,
-                    farmerData.gender,
-                    farmerData.province,
-                    farmerData.district,
-                    farmerData.village,
-                    farmerData.chiefdom,
-                    farmerData.latitude,
-                    farmerData.longitude
+                    farmer.temp_id,
+                    farmer.nrc_number,
+                    farmer.first_name,
+                    farmer.last_name,
+                    farmer.phone_primary,
+                    farmer.phone_alternate,
+                    farmer.email,
+                    farmer.date_of_birth,
+                    farmer.gender,
+                    farmer.province,
+                    farmer.district,
+                    farmer.village,
+                    farmer.chiefdom,
+                    farmer.latitude,
+                    farmer.longitude,
                 ],
-                (_, result) => resolve(result.insertId),
+                (_, result) => {
+                    console.log("🧩 Farmer inserted:", farmer.temp_id);
+                    resolve(result.insertId);
+                },
                 (_, error) => reject(error)
             );
         });
     });
 };
 
-// Get all pending farmers
 export const getPendingFarmers = () => {
     return new Promise((resolve, reject) => {
-        db.transaction(tx => {
+        db.transaction((tx) => {
             tx.executeSql(
-                `SELECT * FROM farmers WHERE sync_status = 'pending'`,
+                `SELECT * FROM farmers WHERE sync_status = 'pending';`,
                 [],
                 (_, { rows: { _array } }) => resolve(_array),
                 (_, error) => reject(error)
@@ -131,12 +145,24 @@ export const getPendingFarmers = () => {
     });
 };
 
-// Get farmer by temp_id
+export const getLocalFarmers = () => {
+    return new Promise((resolve, reject) => {
+        db.transaction((tx) => {
+            tx.executeSql(
+                `SELECT * FROM farmers;`,
+                [],
+                (_, { rows: { _array } }) => resolve(_array),
+                (_, error) => reject(error)
+            );
+        });
+    });
+};
+
 export const getFarmerByTempId = (tempId) => {
     return new Promise((resolve, reject) => {
-        db.transaction(tx => {
+        db.transaction((tx) => {
             tx.executeSql(
-                `SELECT * FROM farmers WHERE temp_id = ?`,
+                `SELECT * FROM farmers WHERE temp_id = ?;`,
                 [tempId],
                 (_, { rows: { _array } }) => resolve(_array[0]),
                 (_, error) => reject(error)
@@ -145,38 +171,45 @@ export const getFarmerByTempId = (tempId) => {
     });
 };
 
-// Update sync status
 export const updateSyncStatus = (tempId, status, farmerId = null) => {
     return new Promise((resolve, reject) => {
-        db.transaction(tx => {
+        db.transaction((tx) => {
             tx.executeSql(
-                `UPDATE farmers SET sync_status = ?, farmer_id = ?, updated_at = CURRENT_TIMESTAMP WHERE temp_id = ?`,
+                `UPDATE farmers 
+         SET sync_status = ?, farmer_id = ?, updated_at = CURRENT_TIMESTAMP
+         WHERE temp_id = ?;`,
                 [status, farmerId, tempId],
-                (_, result) => resolve(result),
+                (_, result) => {
+                    console.log(`🔁 Farmer ${tempId} sync updated → ${status}`);
+                    resolve(result);
+                },
                 (_, error) => reject(error)
             );
         });
     });
 };
 
-// Insert land parcel
-export const insertLandParcel = (tempFarmerId, parcelData) => {
+// ============================================
+// 🔹 LAND & CROPS MANAGEMENT
+// ============================================
+
+export const insertLandParcel = (tempFarmerId, parcel) => {
     return new Promise((resolve, reject) => {
-        db.transaction(tx => {
+        db.transaction((tx) => {
             tx.executeSql(
                 `INSERT INTO land_parcels (
           temp_farmer_id, parcel_id, total_area, ownership_type,
           land_type, soil_type, latitude, longitude
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?);`,
                 [
                     tempFarmerId,
-                    parcelData.parcel_id,
-                    parcelData.total_area,
-                    parcelData.ownership_type,
-                    parcelData.land_type,
-                    parcelData.soil_type,
-                    parcelData.latitude,
-                    parcelData.longitude
+                    parcel.parcel_id,
+                    parcel.total_area,
+                    parcel.ownership_type,
+                    parcel.land_type,
+                    parcel.soil_type,
+                    parcel.latitude,
+                    parcel.longitude,
                 ],
                 (_, result) => resolve(result.insertId),
                 (_, error) => reject(error)
@@ -185,26 +218,25 @@ export const insertLandParcel = (tempFarmerId, parcelData) => {
     });
 };
 
-// Insert crop
-export const insertCrop = (tempFarmerId, cropData) => {
+export const insertCrop = (tempFarmerId, crop) => {
     return new Promise((resolve, reject) => {
-        db.transaction(tx => {
+        db.transaction((tx) => {
             tx.executeSql(
                 `INSERT INTO crops (
           temp_farmer_id, crop_name, variety, area_allocated,
           planting_date, expected_harvest_date, irrigation_method,
           estimated_yield, season
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`,
                 [
                     tempFarmerId,
-                    cropData.crop_name,
-                    cropData.variety,
-                    cropData.area_allocated,
-                    cropData.planting_date,
-                    cropData.expected_harvest_date,
-                    cropData.irrigation_method,
-                    cropData.estimated_yield,
-                    cropData.season
+                    crop.crop_name,
+                    crop.variety,
+                    crop.area_allocated,
+                    crop.planting_date,
+                    crop.expected_harvest_date,
+                    crop.irrigation_method,
+                    crop.estimated_yield,
+                    crop.season,
                 ],
                 (_, result) => resolve(result.insertId),
                 (_, error) => reject(error)
@@ -213,12 +245,11 @@ export const insertCrop = (tempFarmerId, cropData) => {
     });
 };
 
-// Get land parcels for farmer
 export const getLandParcels = (tempFarmerId) => {
     return new Promise((resolve, reject) => {
-        db.transaction(tx => {
+        db.transaction((tx) => {
             tx.executeSql(
-                `SELECT * FROM land_parcels WHERE temp_farmer_id = ?`,
+                `SELECT * FROM land_parcels WHERE temp_farmer_id = ?;`,
                 [tempFarmerId],
                 (_, { rows: { _array } }) => resolve(_array),
                 (_, error) => reject(error)
@@ -227,12 +258,11 @@ export const getLandParcels = (tempFarmerId) => {
     });
 };
 
-// Get crops for farmer
 export const getCrops = (tempFarmerId) => {
     return new Promise((resolve, reject) => {
-        db.transaction(tx => {
+        db.transaction((tx) => {
             tx.executeSql(
-                `SELECT * FROM crops WHERE temp_farmer_id = ?`,
+                `SELECT * FROM crops WHERE temp_farmer_id = ?;`,
                 [tempFarmerId],
                 (_, { rows: { _array } }) => resolve(_array),
                 (_, error) => reject(error)
@@ -241,16 +271,19 @@ export const getCrops = (tempFarmerId) => {
     });
 };
 
-// Get all farmers with counts
+// ============================================
+// 🔹 STATS
+// ============================================
+
 export const getAllFarmersWithStats = () => {
     return new Promise((resolve, reject) => {
-        db.transaction(tx => {
+        db.transaction((tx) => {
             tx.executeSql(
                 `SELECT 
-          COUNT(*) as total,
-          SUM(CASE WHEN sync_status = 'pending' THEN 1 ELSE 0 END) as pending,
-          SUM(CASE WHEN sync_status = 'synced' THEN 1 ELSE 0 END) as synced
-        FROM farmers`,
+            COUNT(*) as total,
+            SUM(CASE WHEN sync_status = 'pending' THEN 1 ELSE 0 END) as pending,
+            SUM(CASE WHEN sync_status = 'synced' THEN 1 ELSE 0 END) as synced
+         FROM farmers;`,
                 [],
                 (_, { rows: { _array } }) => resolve(_array[0]),
                 (_, error) => reject(error)

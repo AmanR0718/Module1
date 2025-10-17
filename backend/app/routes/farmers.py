@@ -1,265 +1,205 @@
+"""
+backend/app/routes/chiefs.py
+Chiefs Management Endpoints for Zambian Farmer Support System.
+"""
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query, File, UploadFile
-from typing import List, Optional
-from datetime import datetime
-from app.models.farmer import (
-    FarmerCreate, Farmer, FarmerUpdate, FarmerInDB, 
-    RegistrationStatus
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    status,
+    Query,
 )
+from typing import List, Optional
+from motor.motor_asyncio import AsyncIOMotorDatabase
+from bson import ObjectId
+from datetime import datetime
+from fastapi import UploadFile, File
+from app.utils.file_handler import FileHandler
+from app.models.chief import Chief
 from app.models.user import UserInDB, UserRole
+from app.core.database import get_database
 from app.routes.auth import get_current_active_user, require_role
-from app.database import get_database
-from app.services.farmer_service import FarmerService
-from app.services.qr_service import QRCodeService
-import os
 
-router = APIRouter()
+router = APIRouter(prefix="/api/chiefs", tags=["Chiefs"])
+file_handler = FileHandler()
 
-@router.post("/", response_model=Farmer, status_code=status.HTTP_201_CREATED)
-async def create_farmer(
-    farmer: FarmerCreate,
-    current_user: UserInDB = Depends(require_role([UserRole.ADMIN, UserRole.OPERATOR]))
+
+
+# ============================================================
+# 🔹 Utility Function
+# ============================================================
+def format_chief(chief_doc: dict) -> Chief:
+    """Convert MongoDB document to Chief model."""
+    chief_doc["_id"] = str(chief_doc.get("_id"))
+    return Chief(**chief_doc)
+
+
+# ============================================================
+# 🔹 Endpoints
+# ============================================================
+@router.get("/", response_model=List[Chief], status_code=status.HTTP_200_OK)
+async def get_chiefs(
+    province: Optional[str] = Query(None, description="Filter by province"),
+    district: Optional[str] = Query(None, description="Filter by district"),
+    active_only: bool = Query(False, description="Return only active chiefs"),
+    skip: int = Query(0, ge=0, description="Pagination skip count"),
+    limit: int = Query(100, le=500, description="Pagination limit"),
+    db: AsyncIOMotorDatabase = Depends(get_database),
+    current_user: UserInDB = Depends(get_current_active_user),
 ):
-    """Create new farmer registration"""
-    db = get_database()
-    farmer_service = FarmerService(db)
-    qr_service = QRCodeService()
-    
-    # Generate unique farmer ID
-    farmer_id = await farmer_service.generate_farmer_id()
-    
-    # Create farmer document
-    farmer_dict = farmer.dict()
-    farmer_dict.update({
-        "farmer_id": farmer_id,
-        "qr_code": "",  # Will be generated
-        "created_at": datetime.utcnow(),
-        "updated_at": datetime.utcnow(),
-        "created_by": str(current_user.id)
-    })
-    
-    # Generate QR code
-    qr_code_data = qr_service.generate_qr_data(farmer_id, farmer_dict)
-    qr_image_path = qr_service.generate_qr_image(qr_code_data, farmer_id)
-    
-    farmer_dict["qr_code"] = qr_code_data
-    farmer_dict["qr_code_image_path"] = qr_image_path
-    
-    # Insert into database
-    result = await db.farmers.insert_one(farmer_dict)
-    farmer_dict["_id"] = str(result.inserted_id)
-    
-    return Farmer(**farmer_dict)
-
-@router.get("/", response_model=List[Farmer])
-async def get_farmers(
-    skip: int = 0,
-    limit: int = 100,
-    province: Optional[str] = None,
-    district: Optional[str] = None,
-    status: Optional[RegistrationStatus] = None,
-    current_user: UserInDB = Depends(get_current_active_user)
-):
-    """Get list of farmers with filters"""
-    db = get_database()
+    """
+    Retrieve a list of chiefs with optional filters (province, district, active).
+    """
     query = {}
-    
-    # Apply filters
     if province:
-        query["address.province"] = province
+        query["province"] = province
     if district:
-        query["address.district"] = district
-    if status:
-        query["registration_status"] = status
-    
-    # Role-based filtering
-    if current_user.role == UserRole.OPERATOR:
-        if current_user.assigned_provinces:
-            query["address.province"] = {"$in": current_user.assigned_provinces}
-        if current_user.assigned_districts:
-            query["address.district"] = {"$in": current_user.assigned_districts}
-    
-    cursor = db.farmers.find(query).skip(skip).limit(limit)
-    farmers = await cursor.to_list(length=limit)
-    
-    return [Farmer(**farmer) for farmer in farmers]
+        query["district"] = district
+    if active_only:
+        query["is_active"] = True
 
-@router.get("/{farmer_id}", response_model=Farmer)
-async def get_farmer(
-    farmer_id: str,
-    current_user: UserInDB = Depends(get_current_active_user)
-):
-    """Get farmer by ID"""
-    db = get_database()
-    farmer = await db.farmers.find_one({"farmer_id": farmer_id})
-    
-    if not farmer:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Farmer not found"
-        )
-    
-    # Check operator permissions
-    if current_user.role == UserRole.OPERATOR:
-        if current_user.assigned_provinces:
-            if farmer["address"]["province"] not in current_user.assigned_provinces:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Access denied to this farmer's data"
-                )
-    
-    return Farmer(**farmer)
+    cursor = db.chiefs.find(query).skip(skip).limit(limit)
+    chiefs = await cursor.to_list(length=limit)
+    return [format_chief(ch) for ch in chiefs]
 
-@router.put("/{farmer_id}", response_model=Farmer)
-async def update_farmer(
-    farmer_id: str,
-    farmer_update: FarmerUpdate,
-    current_user: UserInDB = Depends(require_role([UserRole.ADMIN, UserRole.OPERATOR]))
-):
-    """Update farmer information"""
-    db = get_database()
-    
-    # Find existing farmer
-    existing_farmer = await db.farmers.find_one({"farmer_id": farmer_id})
-    if not existing_farmer:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Farmer not found"
-        )
-    
-    # Update only provided fields
-    update_data = farmer_update.dict(exclude_unset=True)
-    update_data["updated_at"] = datetime.utcnow()
-    
-    await db.farmers.update_one(
-        {"farmer_id": farmer_id},
-        {"$set": update_data}
-    )
-    
-    # Get updated farmer
-    updated_farmer = await db.farmers.find_one({"farmer_id": farmer_id})
-    return Farmer(**updated_farmer)
 
-@router.delete("/{farmer_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_farmer(
-    farmer_id: str,
-    current_user: UserInDB = Depends(require_role([UserRole.ADMIN]))
+# ------------------------------------------------------------
+@router.get("/provinces", status_code=status.HTTP_200_OK)
+async def get_provinces(
+    db: AsyncIOMotorDatabase = Depends(get_database),
+    current_user: UserInDB = Depends(get_current_active_user),
 ):
-    """Delete farmer (Admin only)"""
-    db = get_database()
-    result = await db.farmers.delete_one({"farmer_id": farmer_id})
-    
-    if result.deleted_count == 0:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Farmer not found"
-        )
+    """
+    Retrieve a list of all provinces where chiefs exist.
+    """
+    provinces = await db.chiefs.distinct("province")
+    return {"provinces": sorted(p for p in provinces if p)}
 
-@router.get("/search/by-phone")
-async def search_by_phone(
-    phone: str = Query(..., description="Phone number to search"),
-    current_user: UserInDB = Depends(get_current_active_user)
+
+# ------------------------------------------------------------
+@router.get("/districts", status_code=status.HTTP_200_OK)
+async def get_districts(
+    province: Optional[str] = Query(None, description="Province name for filtering"),
+    db: AsyncIOMotorDatabase = Depends(get_database),
+    current_user: UserInDB = Depends(get_current_active_user),
 ):
-    """Search farmer by phone number"""
-    db = get_database()
-    farmer = await db.farmers.find_one({
-        "personal_info.phone_primary": phone
+    """
+    Retrieve all districts, optionally filtered by a given province.
+    """
+    query = {"province": province} if province else {}
+    districts = await db.chiefs.distinct("district", query)
+    return {"districts": sorted(d for d in districts if d)}
+
+
+# ------------------------------------------------------------
+@router.get("/{chief_id}", response_model=Chief, status_code=status.HTTP_200_OK)
+async def get_chief_by_id(
+    chief_id: str,
+    db: AsyncIOMotorDatabase = Depends(get_database),
+    current_user: UserInDB = Depends(get_current_active_user),
+):
+    """
+    Retrieve a single chief by their MongoDB ID.
+    """
+    if not ObjectId.is_valid(chief_id):
+        raise HTTPException(status_code=400, detail="Invalid Chief ID format.")
+
+    chief = await db.chiefs.find_one({"_id": ObjectId(chief_id)})
+    if not chief:
+        raise HTTPException(status_code=404, detail="Chief not found.")
+
+    return format_chief(chief)
+
+
+# ------------------------------------------------------------
+@router.post("/", response_model=Chief, status_code=status.HTTP_201_CREATED)
+async def create_chief(
+    chief: Chief,
+    db: AsyncIOMotorDatabase = Depends(get_database),
+    current_user: UserInDB = Depends(require_role([UserRole.ADMIN])),
+):
+    """
+    Create a new chief record (Admin only).
+    """
+    existing = await db.chiefs.find_one({
+        "chief_name": chief.chief_name,
+        "province": chief.province,
+        "district": chief.district
     })
-    
-    if not farmer:
+    if existing:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Farmer not found"
+            status_code=400,
+            detail=f"Chief '{chief.chief_name}' already exists in {chief.district}, {chief.province}.",
         )
-    
-    return Farmer(**farmer)
 
-@router.get("/search/by-nrc")
-async def search_by_nrc(
-    nrc: str = Query(..., description="NRC number to search"),
-    current_user: UserInDB = Depends(get_current_active_user)
-):
-    """Search farmer by NRC number"""
-    db = get_database()
-    farmer = await db.farmers.find_one({"nrc_number": nrc})
-    
-    if not farmer:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Farmer not found"
-        )
-    
-    return Farmer(**farmer)
+    chief_doc = chief.model_dump(by_alias=True)
+    chief_doc["is_active"] = chief_doc.get("is_active", True)
+    chief_doc["created_at"] = datetime.utcnow()
+    chief_doc["updated_at"] = datetime.utcnow()
+    chief_doc["created_by"] = current_user.email
 
-@router.post("/{farmer_id}/verify")
-async def verify_farmer(
-    farmer_id: str,
-    current_user: UserInDB = Depends(require_role([UserRole.ADMIN, UserRole.OPERATOR]))
-):
-    """Verify farmer registration"""
-    db = get_database()
-    
-    result = await db.farmers.update_one(
-        {"farmer_id": farmer_id},
-        {
-            "$set": {
-                "registration_status": RegistrationStatus.VERIFIED,
-                "verified_by": str(current_user.id),
-                "verified_at": datetime.utcnow()
-            }
-        }
-    )
-    
-    if result.modified_count == 0:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Farmer not found"
-        )
-    
-    return {"message": "Farmer verified successfully"}
+    result = await db.chiefs.insert_one(chief_doc)
+    chief_doc["_id"] = str(result.inserted_id)
+    return Chief(**chief_doc)
 
-@router.post("/{farmer_id}/upload-document")
-async def upload_document(
-    farmer_id: str,
-    file: UploadFile = File(...),
-    document_type: str = Query(..., description="Type of document"),
-    current_user: UserInDB = Depends(require_role([UserRole.ADMIN, UserRole.OPERATOR]))
+
+# ------------------------------------------------------------
+@router.put("/{chief_id}", response_model=Chief, status_code=status.HTTP_200_OK)
+async def update_chief(
+    chief_id: str,
+    updated_chief: Chief,
+    db: AsyncIOMotorDatabase = Depends(get_database),
+    current_user: UserInDB = Depends(require_role([UserRole.ADMIN])),
 ):
-    """Upload farmer document"""
-    from app.config import settings
-    import aiofiles
-    
-    # Validate file extension
-    file_ext = os.path.splitext(file.filename)[1].lower()
-    if file_ext not in settings.ALLOWED_EXTENSIONS:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"File type not allowed. Allowed: {settings.ALLOWED_EXTENSIONS}"
-        )
-    
-    # Create upload directory
-    upload_dir = os.path.join(settings.UPLOAD_DIR, farmer_id)
-    os.makedirs(upload_dir, exist_ok=True)
-    
-    # Save file
-    file_path = os.path.join(upload_dir, f"{document_type}_{file.filename}")
-    async with aiofiles.open(file_path, 'wb') as out_file:
-        content = await file.read()
-        await out_file.write(content)
-    
-    # Update farmer document record
-    db = get_database()
-    await db.farmers.update_one(
-        {"farmer_id": farmer_id},
-        {
-            "$push": {
-                "identification_documents": {
-                    "doc_type": document_type,
-                    "file_path": file_path,
-                    "uploaded_at": datetime.utcnow()
-                }
-            }
-        }
-    )
-    
-    return {"message": "Document uploaded successfully", "file_path": file_path}
+    """
+    Update a chief's information (Admin only).
+    """
+    if not ObjectId.is_valid(chief_id):
+        raise HTTPException(status_code=400, detail="Invalid Chief ID format.")
+
+    chief = await db.chiefs.find_one({"_id": ObjectId(chief_id)})
+    if not chief:
+        raise HTTPException(status_code=404, detail="Chief not found.")
+
+    update_data = updated_chief.model_dump(exclude_unset=True)
+    update_data["updated_at"] = datetime.utcnow()
+    update_data["last_modified_by"] = current_user.email
+
+    await db.chiefs.update_one({"_id": ObjectId(chief_id)}, {"$set": update_data})
+    updated = await db.chiefs.find_one({"_id": ObjectId(chief_id)})
+    return format_chief(updated)
+
+
+# ------------------------------------------------------------
+@router.delete("/{chief_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_chief(
+    chief_id: str,
+    db: AsyncIOMotorDatabase = Depends(get_database),
+    current_user: UserInDB = Depends(require_role([UserRole.ADMIN])),
+):
+    """
+    Delete a chief record (Admin only).
+    """
+    if not ObjectId.is_valid(chief_id):
+        raise HTTPException(status_code=400, detail="Invalid Chief ID format.")
+
+    result = await db.chiefs.delete_one({"_id": ObjectId(chief_id)})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Chief not found.")
+    return {"detail": "Chief deleted successfully."}
+
+
+@router.post("/{farmer_id}/upload-photo")
+async def upload_farmer_photo(farmer_id: str, file: UploadFile = File(...), db=Depends(get_database)):
+    """Upload farmer photo."""
+    saved_file = await file_handler.save_file(file, folder="photos", prefix=farmer_id)
+    await db.farmers.update_one({"farmer_id": farmer_id}, {"$set": {"photo_path": saved_file["path"]}})
+    return {"message": "Photo uploaded", "file": saved_file}
+
+@router.post("/{farmer_id}/upload-id")
+async def upload_farmer_id(farmer_id: str, file: UploadFile = File(...), db=Depends(get_database)):
+    """Upload farmer ID document."""
+    saved_file = await file_handler.save_file(file, folder="documents", prefix=farmer_id)
+    await db.farmers.update_one({"farmer_id": farmer_id}, {"$set": {"id_document_path": saved_file["path"]}})
+    return {"message": "ID document uploaded", "file": saved_file}

@@ -1,128 +1,192 @@
-from pydantic import BaseModel, Field, validator
-from typing import Optional, List
+"""
+backend/app/models/farmer.py
+Defines all Pydantic models for Farmer data representation and validation.
+"""
+
+from pydantic import BaseModel, Field, EmailStr, field_validator
+from typing import Optional, List, Dict
 from datetime import datetime, date
 from enum import Enum
+from bson import ObjectId
 
+
+# ============================================================
+# ENUMERATIONS
+# ============================================================
 class Gender(str, Enum):
     MALE = "male"
     FEMALE = "female"
     OTHER = "other"
 
-class LandOwnership(str, Enum):
-    OWNED = "owned"
-    LEASED = "leased"
-    SHARED = "shared"
-
-class LandType(str, Enum):
-    IRRIGATED = "irrigated"
-    NON_IRRIGATED = "non_irrigated"
 
 class RegistrationStatus(str, Enum):
-    DRAFT = "draft"
-    PENDING_VERIFICATION = "pending_verification"
-    VERIFIED = "verified"
+    PENDING = "pending"
+    APPROVED = "approved"
     REJECTED = "rejected"
+    ACTIVE = "active"
+    INACTIVE = "inactive"
 
-class GPSCoordinates(BaseModel):
-    latitude: float = Field(..., ge=-90, le=90)
-    longitude: float = Field(..., ge=-180, le=180)
-    accuracy: Optional[float] = None
-    captured_at: Optional[datetime] = None
 
+# ============================================================
+# HELPERS
+# ============================================================
+class PyObjectId(ObjectId):
+    """Custom Pydantic type for MongoDB ObjectId"""
+    @classmethod
+    def __get_validators__(cls):
+        yield cls.validate
+
+    @classmethod
+    def validate(cls, v):
+        if isinstance(v, ObjectId):
+            return v
+        if not ObjectId.is_valid(v):
+            raise ValueError("Invalid ObjectId")
+        return ObjectId(v)
+
+    @classmethod
+    def __modify_schema__(cls, field_schema):
+        field_schema.update(type="string")
+
+
+# ============================================================
+# NESTED MODELS
+# ============================================================
 class PersonalInfo(BaseModel):
-    first_name: str
-    last_name: str
-    phone_primary: str
-    phone_alternate: Optional[str] = None
-    email: Optional[str] = None
-    date_of_birth: date
-    gender: Gender
-    
-    @validator('phone_primary', 'phone_alternate')
-    def validate_phone(cls, v):
-        if v and not v.startswith('+260'):
-            raise ValueError('Phone must start with +260 (Zambian format)')
-        return v
+    first_name: str = Field(..., description="Farmer's first name")
+    middle_name: Optional[str] = Field(None, description="Farmer's middle name")
+    last_name: str = Field(..., description="Farmer's last name")
+    date_of_birth: date = Field(..., description="Date of birth (YYYY-MM-DD)")
+    gender: Gender = Field(..., description="Gender (male, female, other)")
+    phone_primary: str = Field(..., description="Primary phone number")
+    phone_secondary: Optional[str] = Field(None, description="Secondary phone number")
+    email: Optional[EmailStr] = Field(None, description="Email address")
+
 
 class Address(BaseModel):
-    province: str
-    district: str
-    chiefdom: Optional[str] = None
-    village: str
-    gps_coordinates: GPSCoordinates
+    province: str = Field(..., description="Province name")
+    district: str = Field(..., description="District name")
+    constituency: Optional[str] = Field(None, description="Constituency name")
+    ward: Optional[str] = Field(None, description="Ward name")
+    village: str = Field(..., description="Village name")
+    traditional_authority: Optional[str] = Field(None, description="Traditional authority")
+    gps_latitude: Optional[float] = Field(None, description="GPS latitude coordinate")
+    gps_longitude: Optional[float] = Field(None, description="GPS longitude coordinate")
 
-class IdentificationDocument(BaseModel):
-    doc_type: str  # NRC, Passport, etc.
-    doc_number: str
-    issue_date: Optional[date] = None
-    expiry_date: Optional[date] = None
-    file_path: Optional[str] = None
-    verification_status: str = "pending"
 
-class LandParcel(BaseModel):
-    parcel_id: str
-    total_area: float  # in hectares
-    ownership_type: LandOwnership
-    land_type: LandType
-    soil_type: Optional[str] = None
-    water_sources: Optional[List[str]] = []
-    gps_coordinates: GPSCoordinates
-    lease_details: Optional[dict] = None
+class FarmDetails(BaseModel):
+    farm_size_hectares: float = Field(..., gt=0, description="Farm size in hectares")
+    crops_grown: List[str] = Field(default_factory=list, description="List of crops grown")
+    livestock: List[str] = Field(default_factory=list, description="List of livestock")
+    has_irrigation: bool = Field(default=False, description="Whether farm has irrigation")
+    farming_experience_years: int = Field(..., ge=0, description="Years of farming experience")
 
-class Crop(BaseModel):
-    crop_name: str
-    variety: Optional[str] = None
-    area_allocated: float  # in hectares
-    planting_date: Optional[date] = None
-    expected_harvest_date: Optional[date] = None
-    irrigation_method: Optional[str] = None
-    estimated_yield: Optional[float] = None
-    season: str  # e.g., "2024/2025"
 
-class HistoricalData(BaseModel):
-    year: int
-    season: str
-    crop_name: str
-    area: float
-    actual_yield: float
-    notes: Optional[str] = None
-
+# ============================================================
+# MAIN FARMER MODELS
+# ============================================================
 class FarmerBase(BaseModel):
+    farmer_id: str = Field(..., description="Unique farmer ID (ZF-XXXX-XXXXXX)")
+    nrc_number: str = Field(..., description="National Registration Card number (encrypted if stored)")
     personal_info: PersonalInfo
     address: Address
-    nrc_number: str
-    identification_documents: List[IdentificationDocument] = []
-    land_parcels: List[LandParcel] = []
-    current_crops: List[Crop] = []
-    historical_data: List[HistoricalData] = []
-    registration_status: RegistrationStatus = RegistrationStatus.DRAFT
+    farm_details: FarmDetails
+    next_of_kin_name: Optional[str] = Field(None, description="Next of kin's full name")
+    next_of_kin_phone: Optional[str] = Field(None, description="Next of kin's phone number")
+    registration_status: RegistrationStatus = Field(default=RegistrationStatus.PENDING)
+    notes: Optional[str] = Field(None, description="Additional registration notes")
+
 
 class FarmerCreate(FarmerBase):
+    """Model used for farmer registration requests"""
     pass
 
+
 class FarmerUpdate(BaseModel):
+    """Partial update model"""
     personal_info: Optional[PersonalInfo] = None
     address: Optional[Address] = None
-    land_parcels: Optional[List[LandParcel]] = None
-    current_crops: Optional[List[Crop]] = None
+    farm_details: Optional[FarmDetails] = None
+    next_of_kin_name: Optional[str] = None
+    next_of_kin_phone: Optional[str] = None
     registration_status: Optional[RegistrationStatus] = None
+    notes: Optional[str] = None
+    last_modified_by: Optional[str] = None
+    updated_at: Optional[datetime] = None
 
-class FarmerInDB(FarmerBase):
-    id: str = Field(alias="_id")
-    farmer_id: str  # Unique ID like ZM000001
-    qr_code: str
-    qr_code_image_path: Optional[str] = None
-    created_at: datetime
-    updated_at: datetime
-    created_by: str  # User ID of operator
-    verified_by: Optional[str] = None
-    
-    class Config:
-        populate_by_name = True
 
 class Farmer(FarmerBase):
-    id: str
-    farmer_id: str
-    qr_code: str
-    created_at: datetime
-    updated_at: datetime
+    """Database model representation"""
+    id: Optional[PyObjectId] = Field(default=None, alias="_id")
+    qr_code_url: Optional[str] = Field(None, description="Link to farmer QR code image")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_by: Optional[str] = Field(None, description="User email who created this record")
+    last_modified_by: Optional[str] = None
+
+    @field_validator("nrc_number")
+    @classmethod
+    def sanitize_nrc(cls, v):
+        """Ensure NRC number is non-empty before encrypting."""
+        if not v or not v.strip():
+            raise ValueError("NRC number cannot be empty")
+        return v.strip()
+
+    class Config:
+        populate_by_name = True
+        from_attributes = True
+        json_encoders = {ObjectId: str}
+        json_schema_extra = {
+            "example": {
+                "_id": "507f1f77bcf86cd799439011",
+                "farmer_id": "ZF-2025-001234",
+                "nrc_number": "123456/78/9",
+                "personal_info": {
+                    "first_name": "John",
+                    "middle_name": "T.",
+                    "last_name": "Banda",
+                    "date_of_birth": "1980-05-15",
+                    "gender": "male",
+                    "phone_primary": "+260971234567"
+                },
+                "address": {
+                    "province": "Lusaka",
+                    "district": "Chilanga",
+                    "village": "Ngwerere"
+                },
+                "farm_details": {
+                    "farm_size_hectares": 5.5,
+                    "crops_grown": ["maize", "groundnuts"],
+                    "livestock": ["cattle", "chickens"],
+                    "has_irrigation": False,
+                    "farming_experience_years": 15
+                },
+                "registration_status": "active",
+                "created_at": "2025-10-15T08:00:00Z",
+                "updated_at": "2025-10-15T08:00:00Z"
+            }
+        }
+
+
+# ============================================================
+# SEARCH & STATISTICS MODELS
+# ============================================================
+class FarmerSearchParams(BaseModel):
+    """Query parameters for farmer search filters"""
+    farmer_id: Optional[str] = None
+    nrc_number: Optional[str] = None
+    phone: Optional[str] = None
+    province: Optional[str] = None
+    district: Optional[str] = None
+    registration_status: Optional[RegistrationStatus] = None
+    skip: int = Field(default=0, ge=0)
+    limit: int = Field(default=50, le=500)
+
+
+class FarmerStats(BaseModel):
+    """Statistical summary for dashboard analytics"""
+    total_farmers: int
+    active_farmers: int
+    pending_registrations: int
+    farmers_by_province: Dict[str, int]
+    farmers_by_district: Dict[str, int]

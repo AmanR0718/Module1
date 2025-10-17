@@ -8,8 +8,10 @@ import {
     Alert,
     ActivityIndicator,
     KeyboardAvoidingView,
-    Platform
+    Platform,
+    ScrollView,
 } from 'react-native';
+import * as SecureStore from 'expo-secure-store';
 import { login } from '../services/api';
 
 const LoginScreen = ({ navigation }) => {
@@ -17,21 +19,39 @@ const LoginScreen = ({ navigation }) => {
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
 
+    // ============================================================
+    // 🔹 HANDLE LOGIN
+    // ============================================================
     const handleLogin = async () => {
         if (!email || !password) {
             Alert.alert('Error', 'Please enter email and password');
             return;
         }
 
+        // Basic email format validation
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            Alert.alert('Error', 'Please enter a valid email address');
+            return;
+        }
+
         setLoading(true);
         try {
-            await login(email, password);
-            navigation.replace('Home');
+            const data = await login(email, password);
+
+            // Store JWT tokens securely
+            await SecureStore.setItemAsync('access_token', data.access_token);
+            if (data.refresh_token) {
+                await SecureStore.setItemAsync('refresh_token', data.refresh_token);
+            }
+
+            Alert.alert('Login Successful', `Welcome ${email}`);
+            navigation.replace('Home'); // or Dashboard
         } catch (error) {
-            Alert.alert(
-                'Login Failed',
-                error.response?.data?.detail || 'Invalid credentials'
-            );
+            const msg =
+                error.response?.data?.detail ||
+                error.message ||
+                'Invalid credentials. Please try again.';
+            Alert.alert('Login Failed', msg);
         } finally {
             setLoading(false);
         }
@@ -40,51 +60,68 @@ const LoginScreen = ({ navigation }) => {
     return (
         <KeyboardAvoidingView
             style={styles.container}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
-            <View style={styles.header}>
-                <Text style={styles.title}>Zambian Farmer</Text>
-                <Text style={styles.subtitle}>Support System</Text>
-            </View>
+            <ScrollView
+                contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}
+                keyboardShouldPersistTaps="handled"
+            >
+                {/* Header */}
+                <View style={styles.header}>
+                    <Text style={styles.title}>Zambian Farmer</Text>
+                    <Text style={styles.subtitle}>Support System</Text>
+                </View>
 
-            <View style={styles.form}>
-                <TextInput
-                    style={styles.input}
-                    placeholder="Email"
-                    value={email}
-                    onChangeText={setEmail}
-                    autoCapitalize="none"
-                    keyboardType="email-address"
-                    editable={!loading}
-                />
+                {/* Form */}
+                <View style={styles.form}>
+                    <TextInput
+                        style={styles.input}
+                        placeholder="Email"
+                        value={email}
+                        onChangeText={setEmail}
+                        autoCapitalize="none"
+                        keyboardType="email-address"
+                        editable={!loading}
+                    />
 
-                <TextInput
-                    style={styles.input}
-                    placeholder="Password"
-                    value={password}
-                    onChangeText={setPassword}
-                    secureTextEntry
-                    editable={!loading}
-                />
+                    <TextInput
+                        style={styles.input}
+                        placeholder="Password"
+                        value={password}
+                        onChangeText={setPassword}
+                        secureTextEntry
+                        editable={!loading}
+                    />
 
-                <TouchableOpacity
-                    style={[styles.button, loading && styles.buttonDisabled]}
-                    onPress={handleLogin}
-                    disabled={loading}
-                >
-                    {loading ? (
-                        <ActivityIndicator color="#fff" />
-                    ) : (
-                        <Text style={styles.buttonText}>Login</Text>
-                    )}
-                </TouchableOpacity>
-            </View>
+                    <TouchableOpacity
+                        style={[styles.button, loading && styles.buttonDisabled]}
+                        onPress={handleLogin}
+                        disabled={loading}
+                    >
+                        {loading ? (
+                            <ActivityIndicator color="#fff" />
+                        ) : (
+                            <Text style={styles.buttonText}>Login</Text>
+                        )}
+                    </TouchableOpacity>
 
-            <Text style={styles.footer}>Version 1.0.0</Text>
+                    <TouchableOpacity
+                        onPress={() => navigation.navigate('ForgotPassword')}
+                    >
+                        <Text style={styles.forgotText}>Forgot Password?</Text>
+                    </TouchableOpacity>
+                </View>
+
+                {/* Footer */}
+                <Text style={styles.footer}>Version 1.0.0</Text>
+            </ScrollView>
         </KeyboardAvoidingView>
     );
 };
 
+// ============================================================
+// 🔹 STYLES
+// ============================================================
 const styles = StyleSheet.create({
     container: {
         flex: 1,
@@ -94,7 +131,7 @@ const styles = StyleSheet.create({
     },
     header: {
         alignItems: 'center',
-        marginBottom: 50,
+        marginBottom: 40,
     },
     title: {
         fontSize: 32,
@@ -109,20 +146,20 @@ const styles = StyleSheet.create({
     form: {
         backgroundColor: '#fff',
         borderRadius: 10,
-        padding: 20,
+        padding: 25,
     },
     input: {
         borderWidth: 1,
         borderColor: '#ddd',
-        borderRadius: 5,
+        borderRadius: 8,
         padding: 15,
         marginBottom: 15,
         fontSize: 16,
     },
     button: {
         backgroundColor: '#198A48',
-        borderRadius: 5,
-        padding: 15,
+        borderRadius: 8,
+        paddingVertical: 15,
         alignItems: 'center',
         marginTop: 10,
     },
@@ -134,10 +171,17 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: 'bold',
     },
+    forgotText: {
+        color: '#198A48',
+        textAlign: 'center',
+        marginTop: 15,
+        fontWeight: '600',
+    },
     footer: {
         textAlign: 'center',
         color: '#fff',
         marginTop: 30,
+        fontSize: 14,
     },
 });
 

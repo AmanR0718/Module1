@@ -1,39 +1,59 @@
-import * as Network from 'expo-network';
+// ============================================
+// File: mobile/src/services/sync.js
+// Offline Farmer Sync Logic
+// ============================================
+
+import * as Network from "expo-network";
 import {
     getPendingFarmers,
     getLandParcels,
     getCrops,
-    updateSyncStatus
-} from './database';
-import { syncFarmers } from './api';
+    updateSyncStatus,
+} from "./database";
+import { syncFarmers } from "./api";
 
-// Check network connectivity
+let isSyncing = false; // Prevents parallel syncs
+
+/**
+ * ✅ Check if device has active internet connection
+ */
 export const checkConnectivity = async () => {
-    const networkState = await Network.getNetworkStateAsync();
-    return networkState.isConnected && networkState.isInternetReachable;
+    try {
+        const state = await Network.getNetworkStateAsync();
+        return state.isConnected && state.isInternetReachable;
+    } catch (error) {
+        console.warn("⚠️ Network check failed:", error);
+        return false;
+    }
 };
 
-// Sync pending farmers to backend
+/**
+ * 🔁 Sync all pending farmers from local SQLite to backend
+ */
 export const syncPendingFarmers = async () => {
+    if (isSyncing) {
+        console.log("⏳ Sync already in progress, skipping...");
+        return;
+    }
+
+    isSyncing = true;
+    console.log("🌍 Checking for pending farmers to sync...");
+
     try {
-        // Check connectivity
         const isConnected = await checkConnectivity();
         if (!isConnected) {
-            throw new Error('No internet connection');
+            throw new Error("No internet connection");
         }
 
-        // Get all pending farmers
         const pendingFarmers = await getPendingFarmers();
-
         if (pendingFarmers.length === 0) {
-            return {
-                success: true,
-                message: 'No farmers to sync',
-                synced: 0
-            };
+            console.log("✅ No pending farmers to sync.");
+            return { success: true, synced: 0 };
         }
 
-        // Prepare farmers data with related records
+        console.log(`📦 Found ${pendingFarmers.length} unsynced farmers.`);
+
+        // Prepare each farmer with related records
         const farmersToSync = await Promise.all(
             pendingFarmers.map(async (farmer) => {
                 const landParcels = await getLandParcels(farmer.temp_id);
@@ -48,7 +68,7 @@ export const syncPendingFarmers = async () => {
                         phone_alternate: farmer.phone_alternate,
                         email: farmer.email,
                         date_of_birth: farmer.date_of_birth,
-                        gender: farmer.gender
+                        gender: farmer.gender,
                     },
                     address: {
                         province: farmer.province,
@@ -57,120 +77,66 @@ export const syncPendingFarmers = async () => {
                         chiefdom: farmer.chiefdom,
                         gps_coordinates: {
                             latitude: farmer.latitude,
-                            longitude: farmer.longitude
-                        }
+                            longitude: farmer.longitude,
+                        },
                     },
                     nrc_number: farmer.nrc_number,
-                    land_parcels: landParcels.map(parcel => ({
-                        parcel_id: parcel.parcel_id,
-                        total_area: parcel.total_area,
-                        ownership_type: parcel.ownership_type,
-                        land_type: parcel.land_type,
-                        soil_type: parcel.soil_type,
-                        gps_coordinates: {
-                            latitude: parcel.latitude,
-                            longitude: parcel.longitude
-                        }
+                    land_parcels: landParcels.map((p) => ({
+                        parcel_id: p.parcel_id,
+                        total_area: p.total_area,
+                        ownership_type: p.ownership_type,
+                        land_type: p.land_type,
+                        soil_type: p.soil_type,
+                        gps_coordinates: { latitude: p.latitude, longitude: p.longitude },
                     })),
-                    current_crops: crops.map(crop => ({
-                        crop_name: crop.crop_name,
-                        variety: crop.variety,
-                        area_allocated: crop.area_allocated,
-                        planting_date: crop.planting_date,
-                        expected_harvest_date: crop.expected_harvest_date,
-                        irrigation_method: crop.irrigation_method,
-                        estimated_yield: crop.estimated_yield,
-                        season: crop.season
+                    current_crops: crops.map((c) => ({
+                        crop_name: c.crop_name,
+                        variety: c.variety,
+                        area_allocated: c.area_allocated,
+                        planting_date: c.planting_date,
+                        expected_harvest_date: c.expected_harvest_date,
+                        irrigation_method: c.irrigation_method,
+                        estimated_yield: c.estimated_yield,
+                        season: c.season,
                     })),
-                    registration_status: 'pending_verification'
+                    registration_status: "pending_verification",
                 };
             })
         );
 
-        // Sync to backend
+        // Send to backend
         const result = await syncFarmers(farmersToSync);
+        console.log(`✅ Sync complete: ${result.successful} successful, ${result.failed} failed.`);
 
-        // Update local database sync status
-        for (const syncResult of result.results) {
-            if (syncResult.status === 'created' || syncResult.status === 'updated') {
-                await updateSyncStatus(
-                    syncResult.temp_id,
-                    'synced',
-                    syncResult.farmer_id
-                );
+        // Update local DB
+        for (const syncResult of result.results || []) {
+            if (["created", "updated"].includes(syncResult.status)) {
+                await updateSyncStatus(syncResult.temp_id, "synced", syncResult.farmer_id);
+                console.log(`🟢 Farmer ${syncResult.farmer_id} marked as synced.`);
             }
         }
 
         return {
             success: true,
-            message: `Synced ${result.successful} farmers`,
             synced: result.successful,
             failed: result.failed,
-            errors: result.errors
+            errors: result.errors,
         };
-
     } catch (error) {
-        console.error('Sync error:', error);
-        return {
-            success: false,
-            message: error.message || 'Sync failed',
-            synced: 0
-        };
+        console.error("❌ Sync error:", error.message);
+        return { success: false, message: error.message, synced: 0 };
+    } finally {
+        isSyncing = false;
     }
 };
 
-// Auto sync when connection is available
-export const setupAutoSync = (interval = 300000) => { // 5 minutes
+/**
+ * 🔄 Auto Sync (every X minutes)
+ */
+export const setupAutoSync = (interval = 300000) => {
+    console.log(`🕒 Auto sync set for every ${interval / 1000 / 60} minutes.`);
     return setInterval(async () => {
         const isConnected = await checkConnectivity();
-        if (isConnected) {
-            await syncPendingFarmers();
-        }
+        if (isConnected) await syncPendingFarmers();
     }, interval);
-};
-
-
-// ============================================
-// File: mobile/src/utils/location.js
-// ============================================
-import * as Location from 'expo-location';
-
-export const getCurrentLocation = async () => {
-    try {
-        // Request permission
-        const { status } = await Location.requestForegroundPermissionsAsync();
-
-        if (status !== 'granted') {
-            throw new Error('Location permission denied');
-        }
-
-        // Get current position with high accuracy
-        const location = await Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.High,
-        });
-
-        return {
-            latitude: location.coords.latitude,
-            longitude: location.coords.longitude,
-            accuracy: location.coords.accuracy,
-            timestamp: new Date(location.timestamp)
-        };
-
-    } catch (error) {
-        console.error('Location error:', error);
-        throw error;
-    }
-};
-
-export const validateZambianCoordinates = (latitude, longitude) => {
-    // Zambia bounds
-    const minLat = -18.5;
-    const maxLat = -8.0;
-    const minLon = 21.5;
-    const maxLon = 34.0;
-
-    return (
-        latitude >= minLat && latitude <= maxLat &&
-        longitude >= minLon && longitude <= maxLon
-    );
 };
