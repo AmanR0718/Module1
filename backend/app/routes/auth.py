@@ -24,7 +24,7 @@ from app.utils.security import (
     create_refresh_token,
     decode_token,
 )
-from app.core.database import get_database
+from app.database import get_database
 
 # ---------------------------------------------------------
 # Router setup

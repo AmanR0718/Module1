@@ -10,8 +10,8 @@ import logging
 import time
 import asyncio
 
-from app.core.config import settings
-from app.core.database import connect_to_mongo, close_mongo_connection, create_indexes
+from app.config import settings
+from app.database import connect_to_mongo, close_mongo_connection, create_indexes
 from app.routes import auth, farmers, chiefs, inventory, sync
 
 

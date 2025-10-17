@@ -8,6 +8,8 @@ from typing import Optional
 from datetime import datetime
 from enum import Enum
 from bson import ObjectId
+from pydantic import GetJsonSchemaHandler
+from pydantic_core import core_schema
 
 
 # ============================================================
@@ -18,29 +20,28 @@ class UserRole(str, Enum):
     ADMIN = "admin"
     FARMER = "farmer"
     CHIEF = "chief"
-    EXTENSION_OFFICER = "extension_officer"
+    OPERATOR = "operator"
 
 
 # ============================================================
 # OBJECTID HELPER
 # ============================================================
 class PyObjectId(ObjectId):
-    """Custom ObjectId type for MongoDB integration."""
     @classmethod
-    def __get_validators__(cls):
-        yield cls.validate
+    def __get_pydantic_core_schema__(cls, _source, _handler):
+        return core_schema.no_info_plain_validator_function(cls.validate)
+
+    @classmethod
+    def __get_pydantic_json_schema__(cls, _schema, handler: GetJsonSchemaHandler):
+        json_schema = handler(_schema)
+        json_schema.update(type="string")
+        return json_schema
 
     @classmethod
     def validate(cls, v):
-        if isinstance(v, ObjectId):
-            return v
         if not ObjectId.is_valid(v):
             raise ValueError("Invalid ObjectId")
         return ObjectId(v)
-
-    @classmethod
-    def __modify_schema__(cls, field_schema):
-        field_schema.update(type="string")
 
 
 # ============================================================

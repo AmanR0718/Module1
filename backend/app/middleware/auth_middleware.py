@@ -5,7 +5,7 @@ JWT Authentication Middleware and Current User Dependency
 
 from fastapi import Request, HTTPException, status, Depends
 from typing import Optional, Dict
-from app.core.database import get_database
+from app.database import get_database
 from app.utils.security import decode_token
 import logging
 

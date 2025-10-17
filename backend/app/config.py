@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     # ============================================
     # 🔹 JWT Configuration
     # ============================================
-    JWT_SECRET_KEY: str = "YourSuperSecureJWTKeyForZambianFarmersSystem2025"
+    JWT_SECRET_KEY: str = "tt1eTajVweALvwxHqBGwVjNqScCjT4NoSd1-4q3edLk"
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     # ============================================
     # 🔹 AES Encryption
     # ============================================
-    AES_ENCRYPTION_KEY: str = "YourAES256EncryptionKeyForSensitiveData2025"
+    AES_ENCRYPTION_KEY: str = "315741653158b40e3608bbe97704bb22"
 
     @field_validator("AES_ENCRYPTION_KEY")
     @classmethod

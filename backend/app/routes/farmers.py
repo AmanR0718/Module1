@@ -3,6 +3,7 @@ backend/app/routes/chiefs.py
 Chiefs Management Endpoints for Zambian Farmer Support System.
 """
 
+
 from fastapi import (
     APIRouter,
     Depends,
@@ -18,7 +19,7 @@ from fastapi import UploadFile, File
 from app.utils.file_handler import FileHandler
 from app.models.chief import Chief
 from app.models.user import UserInDB, UserRole
-from app.core.database import get_database
+from app.database import get_database
 from app.routes.auth import get_current_active_user, require_role
 
 router = APIRouter(prefix="/api/chiefs", tags=["Chiefs"])

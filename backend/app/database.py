@@ -8,7 +8,7 @@ import logging
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from pymongo.errors import ServerSelectionTimeoutError, PyMongoError
 
-from app.core.config import settings
+from app.config import settings
 
 # --------------------------------------------------
 # Global Instances

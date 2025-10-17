@@ -6,25 +6,26 @@ Pydantic model for Chief collection.
 from pydantic import BaseModel, Field
 from typing import Optional, Dict
 from bson import ObjectId
+from pydantic import GetJsonSchemaHandler
+from pydantic_core import core_schema
 
 
 class PyObjectId(ObjectId):
-    """Custom type for MongoDB ObjectId fields."""
     @classmethod
-    def __get_validators__(cls):
-        yield cls.validate
+    def __get_pydantic_core_schema__(cls, _source, _handler):
+        return core_schema.no_info_plain_validator_function(cls.validate)
+
+    @classmethod
+    def __get_pydantic_json_schema__(cls, _schema, handler: GetJsonSchemaHandler):
+        json_schema = handler(_schema)
+        json_schema.update(type="string")
+        return json_schema
 
     @classmethod
     def validate(cls, v):
-        if isinstance(v, ObjectId):
-            return v
         if not ObjectId.is_valid(v):
             raise ValueError("Invalid ObjectId")
         return ObjectId(v)
-
-    @classmethod
-    def __modify_schema__(cls, field_schema):
-        field_schema.update(type="string")
 
 
 class Chief(BaseModel):

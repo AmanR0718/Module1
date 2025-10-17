@@ -38,10 +38,10 @@ services:
     environment:
       MONGODB_URL: mongodb://${MONGO_INITDB_ROOT_USERNAME:-admin}:${MONGO_INITDB_ROOT_PASSWORD:-Admin123}@mongodb:27017/
       MONGODB_DB_NAME: ${MONGO_INITDB_DATABASE:-zambian_farmers}
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-YourSuperSecureJWTKeyForZambianFarmersSystem2025}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-tt1eTajVweALvwxHqBGwVjNqScCjT4NoSd1-4q3edLk}
       JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
-      AES_ENCRYPTION_KEY: ${AES_ENCRYPTION_KEY:-YourAES256EncryptionKeyForSensitiveData2025}
+      AES_ENCRYPTION_KEY: "${AES_ENCRYPTION_KEY:-315741653158b40e3608bbe97704bb22}"
       DEBUG: ${DEBUG:-True}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-["http://localhost:3000","http://localhost:19006","http://localhost:8000"]}
       REDIS_URL: redis://redis:6379/0
