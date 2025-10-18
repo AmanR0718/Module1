@@ -23,6 +23,7 @@ services:
       test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
       interval: 10s
       timeout: 5s
+      
       retries: 5
       start_period: 30s
 
@@ -83,8 +84,12 @@ services:
         condition: service_healthy
     networks:
       - farmer_network
+  # Add this command to install wget
+    command: >
+      sh -c "apk add --no-cache wget &&
+             nginx -g 'daemon off;'"
     healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://localhost || exit 1"]
+      test: ["CMD-SHELL", "wget -q --spider http://localhost/health || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5

@@ -98,7 +98,7 @@ try {
         role: 'admin',
         is_active: true,
         hashed_password:
-          '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5PqjM4T.GdqYu', // bcrypt('Admin@123')
+          '$2b$12$DyHXIclcpfNnfvK7b/jMh.ZIBgmIdnq.pAc56ttaNiEAfpvDbENp', // bcrypt('Admin@123')
         assigned_provinces: [],
         assigned_districts: [],
         created_at: new Date(),

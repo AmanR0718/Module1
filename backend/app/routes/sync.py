@@ -17,7 +17,7 @@ import logging
 from app.models.user import UserInDB, UserRole
 from app.routes.auth import get_current_active_user, require_role
 from app.services.sync_service import SyncService
-from app.core.database import get_database
+from app.database import get_database
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -63,7 +63,8 @@ class SyncResponse(BaseModel):
 async def sync_batch_farmers(
     sync_request: SyncRequest,
     db: AsyncIOMotorDatabase = Depends(get_database),
-    current_user: UserInDB = Depends(require_role([UserRole.ADMIN, UserRole.EXTENSION_OFFICER])),
+    current_user: UserInDB = Depends(require_role([UserRole.ADMIN, UserRole.OPERATOR])),
+
 ):
     """
     Synchronize a batch of farmers uploaded from the mobile app.

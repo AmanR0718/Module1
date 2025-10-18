@@ -2,7 +2,6 @@
 backend/app/routes/auth.py
 Authentication & Authorization routes for the Zambian Farmer Support System.
 """
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from datetime import datetime
@@ -26,10 +25,11 @@ from app.utils.security import (
 )
 from app.database import get_database
 
+
 # ---------------------------------------------------------
 # Router setup
 # ---------------------------------------------------------
-router = APIRouter(prefix="/api/auth", tags=["Authentication"])
+router = APIRouter(tags=["Authentication"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 logger = logging.getLogger(__name__)
 

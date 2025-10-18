@@ -3,13 +3,14 @@ backend/app/models/user.py
 Pydantic models for user management, authentication, and authorization.
 """
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, ConfigDict
 from typing import Optional
 from datetime import datetime
 from enum import Enum
 from bson import ObjectId
-from pydantic import GetJsonSchemaHandler
-from pydantic_core import core_schema
+
+# Import the fixed PyObjectId from common module
+from app.models.common import PyObjectId
 
 
 # ============================================================
@@ -21,27 +22,6 @@ class UserRole(str, Enum):
     FARMER = "farmer"
     CHIEF = "chief"
     OPERATOR = "operator"
-
-
-# ============================================================
-# OBJECTID HELPER
-# ============================================================
-class PyObjectId(ObjectId):
-    @classmethod
-    def __get_pydantic_core_schema__(cls, _source, _handler):
-        return core_schema.no_info_plain_validator_function(cls.validate)
-
-    @classmethod
-    def __get_pydantic_json_schema__(cls, _schema, handler: GetJsonSchemaHandler):
-        json_schema = handler(_schema)
-        json_schema.update(type="string")
-        return json_schema
-
-    @classmethod
-    def validate(cls, v):
-        if not ObjectId.is_valid(v):
-            raise ValueError("Invalid ObjectId")
-        return ObjectId(v)
 
 
 # ============================================================
@@ -91,11 +71,15 @@ class User(UserBase):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
-    class Config:
-        populate_by_name = True
-        from_attributes = True
-        json_encoders = {ObjectId: str}
-        json_schema_extra = {
+    model_config = ConfigDict(
+        populate_by_name=True,
+        from_attributes=True,
+        arbitrary_types_allowed=True,
+        json_encoders={
+            ObjectId: str,
+            datetime: lambda v: v.isoformat()
+        },
+        json_schema_extra={
             "example": {
                 "_id": "507f1f77bcf86cd799439011",
                 "email": "admin@example.com",
@@ -107,15 +91,18 @@ class User(UserBase):
                 "updated_at": "2025-10-14T12:00:00Z",
             }
         }
+    )
 
 
 class UserInDB(User):
     """Internal user model (with hashed password)"""
     hashed_password: str = Field(..., description="Hashed password for authentication")
 
-    class Config:
-        populate_by_name = True
-        from_attributes = True
+    model_config = ConfigDict(
+        populate_by_name=True,
+        from_attributes=True,
+        arbitrary_types_allowed=True,
+    )
 
 
 # ============================================================
@@ -127,14 +114,15 @@ class Token(BaseModel):
     refresh_token: Optional[str] = Field(None, description="Optional JWT refresh token")
     token_type: str = Field(default="bearer", description="Token type (usually 'bearer')")
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
                 "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
                 "token_type": "bearer",
             }
         }
+    )
 
 
 class TokenData(BaseModel):
@@ -143,11 +131,49 @@ class TokenData(BaseModel):
     role: Optional[UserRole] = Field(None, description="User's role embedded in token")
     user_id: Optional[str] = Field(None, description="User ID for internal references")
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "email": "user@example.com",
                 "role": "farmer",
                 "user_id": "507f1f77bcf86cd799439011"
             }
         }
+    )
+
+
+# ============================================================
+# LOGIN REQUEST MODEL
+# ============================================================
+class LoginRequest(BaseModel):
+    """Login request model"""
+    email: EmailStr = Field(..., description="User's email address")
+    password: str = Field(..., description="User's password")
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "email": "admin@example.com",
+                "password": "SecurePass123"
+            }
+        }
+    )
+
+
+# ============================================================
+# USER RESPONSE WITH STATS
+# ============================================================
+class UserWithStats(User):
+    """User model with additional statistics"""
+    total_farmers_registered: Optional[int] = Field(0, description="Total farmers registered by this operator")
+    last_activity: Optional[datetime] = Field(None, description="Last activity timestamp")
+    
+    model_config = ConfigDict(
+        populate_by_name=True,
+        from_attributes=True,
+        arbitrary_types_allowed=True,
+        json_encoders={
+            ObjectId: str,
+            datetime: lambda v: v.isoformat()
+        }
+    )

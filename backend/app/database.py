@@ -80,8 +80,8 @@ def get_database() -> AsyncIOMotorDatabase:
     Return an active MongoDB database instance.
     """
     global database
-    if not database:
-        raise ConnectionError("Database not initialized. Did you forget to call connect_to_mongo()?")
+    if database is None:
+        raise RuntimeError("Database not initialized. Call connect_to_mongo() first.")
     return database
 
 

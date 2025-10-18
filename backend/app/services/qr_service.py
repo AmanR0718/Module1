@@ -9,7 +9,7 @@ import json
 import os
 from datetime import datetime
 from typing import Dict, Any
-from app.core.config import settings
+from app.config import settings
 from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont
 import logging

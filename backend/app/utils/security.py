@@ -196,3 +196,45 @@ async def require_chief(current_user: dict = Depends(get_current_user)) -> dict:
     if current_user.get("role") != "chief":
         raise HTTPException(status_code=403, detail="Chief access required")
     return current_user
+
+
+
+# ============================================================
+# 🔹 ENCRYPTION HELPERS (used by FarmerService and SyncService)
+# ============================================================
+
+from Crypto.Cipher import AES
+import base64
+
+def _pad(data: bytes) -> bytes:
+    """Pad data to a multiple of 16 bytes (for AES block size)."""
+    return data + b"\0" * (16 - len(data) % 16)
+
+
+def encrypt_sensitive_data(plain_text: str) -> str:
+    """
+    Encrypt sensitive fields (like NRC number) using AES-256 CBC mode.
+    Returns base64 encoded ciphertext.
+    """
+    if not plain_text:
+        return plain_text
+
+    key = settings.AES_ENCRYPTION_KEY[:32].encode()  # AES-256 key
+    iv = key[:16]  # 128-bit IV (same key slice)
+    cipher = AES.new(key, AES.MODE_CBC, iv)
+    encrypted = cipher.encrypt(_pad(plain_text.encode()))
+    return base64.b64encode(encrypted).decode()
+
+
+def decrypt_sensitive_data(encrypted_text: str) -> str:
+    """
+    Decrypt AES-256 CBC ciphertext to retrieve original plain text.
+    """
+    if not encrypted_text:
+        return encrypted_text
+
+    key = settings.AES_ENCRYPTION_KEY[:32].encode()
+    iv = key[:16]
+    cipher = AES.new(key, AES.MODE_CBC, iv)
+    decrypted = cipher.decrypt(base64.b64decode(encrypted_text))
+    return decrypted.rstrip(b"\0").decode()

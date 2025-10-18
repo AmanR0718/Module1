@@ -23,8 +23,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 
 # Upgrade pip & install dependencies
-RUN pip install --upgrade pip \
+RUN pip install --upgrade pip setuptools wheel \
+    && pip install --no-cache-dir bcrypt==4.1.3 passlib[bcrypt]==1.7.4 \
     && pip install --no-cache-dir -r requirements.txt
+
 
 # ============================================
 # Copy application source code
