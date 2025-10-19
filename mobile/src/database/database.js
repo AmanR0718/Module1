@@ -1,7 +1,7 @@
 import * as SQLite from 'expo-sqlite';
 import { Alert } from 'react-native';
 
-const DATABASE_NAME = 'zambian_farmers.db';
+const db = SQLite.openDatabase('farmers.db');
 const DATABASE_VERSION = 1;
 
 let database = null;

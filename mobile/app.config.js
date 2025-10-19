@@ -37,12 +37,15 @@ export default {
       favicon: "./assets/favicon.png"
     },
     plugins: [
+      "expo-barcode-scanner",
+      "expo-sqlite",
       [
         "expo-location",
         {
           locationAlwaysAndWhenInUsePermission:
             "Allow app to use your location for farmer registration."
         }
+        
       ],
       [
         "expo-camera",

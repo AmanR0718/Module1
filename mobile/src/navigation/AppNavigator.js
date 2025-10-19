@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
-import { createStackNavigator } from '@react-navigation/stack';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import * as SecureStore from 'expo-secure-store';
 import { getCurrentUser } from '../services/api';
 
@@ -14,7 +14,7 @@ import FarmerDetailScreen from '../screens/FarmerDetailScreen';
 import InventoryScreen from '../screens/InventoryScreen';   // 🔹 future
 import ReportsScreen from '../screens/ReportsScreen';       // 🔹 future
 
-const Stack = createStackNavigator();
+const Stack = createNativeStackNavigator();
 
 /**
  * Stack for field operators (mobile data collectors)

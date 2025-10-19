@@ -1,3 +1,6 @@
+# ============================================================
+# 🔹 PYTHON / FASTAPI BACKEND
+# ============================================================
 __pycache__/
 *.py[cod]
 *$py.class
@@ -6,34 +9,70 @@ __pycache__/
 env/
 venv/
 ENV/
-.venv
-
-# FastAPI
+.venv/
 *.log
+*.pid
 
-# Database
+# Local SQLite / Temp files
 *.db
 *.sqlite
 uploads/
-
-# Environment
-.env
-.env.local
-
-# IDEs
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# OS
-.DS_Store
-Thumbs.db
+media/
+tmp/
+logs/
 
 # Testing
 .pytest_cache/
 .coverage
 htmlcov/
 
-# Docker
+# ============================================================
+# 🔹 ENVIRONMENT FILES
+# ============================================================
+.env
+.env.*
+!.env.example   # keep a safe example for config reference
+
+# ============================================================
+# 🔹 FRONTEND / EXPO (React Native)
+# ============================================================
+node_modules/
+.expo/
+.expo-shared/
+dist/
+web-build/
+build/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Metro / Babel / Cache
+.cache/
+babel.config.js
+
+# Temporary Bundles
+*.bundle
+*.map
+*.tmp
+
+# ============================================================
+# 🔹 IDEs / EDITORS
+# ============================================================
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ============================================================
+# 🔹 OS SYSTEM FILES
+# ============================================================
+.DS_Store
+Thumbs.db
+
+# ============================================================
+# 🔹 DOCKER
+# ============================================================
 docker-compose.override.yml
+*.pid
+*.log
+*.tar
