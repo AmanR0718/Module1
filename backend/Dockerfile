@@ -1,31 +1,38 @@
-# ============================================
-# Zambian Farmer System - FastAPI Backend
-# Base: Python 3.11 slim (lightweight, secure)
-# ============================================
-FROM python:3.11-slim
+# ============================================================
+#  Zambian Farmer Backend — Final working bcrypt build
+# ============================================================
 
-# Set working directory
+FROM python:3.11-bookworm
+
+ENV DEBIAN_FRONTEND=noninteractive
 WORKDIR /app
 
-# ============================================
-# Install system dependencies
-# ============================================
+# ------------------------------------------------------------
+# Install full build toolchain and modern Rust (for bcrypt)
+# ------------------------------------------------------------
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    libpq-dev \
-    libffi-dev \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
+        build-essential \
+        libffi-dev \
+        python3-dev \
+        curl \
+    && curl https://sh.rustup.rs -sSf | bash -s -- -y \
+    && . "$HOME/.cargo/env" \
+    && rustup install stable \
+    && rustup default stable \
+    && echo 'export PATH=$HOME/.cargo/bin:$PATH' >> /root/.bashrc \
+    && export PATH=$HOME/.cargo/bin:$PATH \
+    && python3 -m pip install --upgrade pip setuptools wheel \
+    # Force bcrypt source build with native C extension
+    && python3 -m pip install --no-binary bcrypt --no-cache-dir --force-reinstall bcrypt==4.1.3 passlib[bcrypt]==1.7.4 \
+    && apt-get purge -y build-essential python3-dev \
+    && apt-get autoremove -y && apt-get clean && rm -rf /var/lib/apt/lists/*
+
 
 # ============================================
-# Copy dependency file first (for layer caching)
+# Copy application files
 # ============================================
 COPY requirements.txt .
-
-# Upgrade pip & install dependencies
-RUN pip install --upgrade pip setuptools wheel \
-    && pip install --no-cache-dir bcrypt==4.1.3 passlib[bcrypt]==1.7.4 \
-    && pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 
 # ============================================

@@ -10,6 +10,9 @@ import * as Network from "expo-network";
 const API_BASE_URL =
     process.env.EXPO_PUBLIC_API_URL || "http://10.169.131.102:8000";
 
+// const API_BASE_URL = Constants.expoConfig.extra.apiUrl;
+
+
 // Axios instance
 const api = axios.create({
     baseURL: API_BASE_URL,
