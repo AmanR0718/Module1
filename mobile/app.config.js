@@ -56,7 +56,10 @@ export default {
       ]
     ],
     extra: {
-      apiUrl: process.env.EXPO_PUBLIC_API_URL
+      apiUrl: "https://laughing-chainsaw-p54vpq5x945276p5-8000.app.github.dev",
+      eas: {
+    projectId: "11a726c3-1588-4c2d-92b7-7f2a626e1916"
+  }
     },
     platforms: ["ios", "android", "web"]
   }
