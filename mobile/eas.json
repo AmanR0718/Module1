@@ -1,26 +1,21 @@
 {
-  "cli": {
-    "version": ">= 13.0.0"
-  },
+  "cli": { "version": ">= 13.0.0" },
   "build": {
     "development": {
       "developmentClient": true,
       "distribution": "internal",
       "android": {
-        "buildType": "apk"
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleDebug"
       },
-      "ios": {
-        "simulator": true
+      "env": {
+        "NODE_OPTIONS": "--max_old_space_size=4096",
+        "EAS_SKIP_AUTO_FINGERPRINT": "1"
       }
-    },
-    "preview": {
-      "distribution": "internal"
     },
     "production": {
       "autoIncrement": true
     }
   },
-  "submit": {
-    "production": {}
-  }
+  "submit": { "production": {} }
 }

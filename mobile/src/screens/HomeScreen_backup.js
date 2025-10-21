@@ -1,3 +1,4 @@
+import { shadowStyle } from '../styles/shadow';
 import React, { useState, useEffect } from 'react';
 import {
     View,
@@ -177,7 +178,8 @@ const styles = StyleSheet.create({
     },
     header: {
         backgroundColor: '#198A48',
-        padding: 20,
+        padding:
+  ...shadowStyle, 20,
         paddingTop: 50,
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -217,10 +219,6 @@ const styles = StyleSheet.create({
         borderRadius: 10,
         alignItems: 'center',
         elevation: 2,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
     },
     pendingCard: {
         backgroundColor: '#FFF3E0',
@@ -249,10 +247,6 @@ const styles = StyleSheet.create({
         padding: 20,
         borderRadius: 10,
         elevation: 2,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
     },
     syncButton: {
         backgroundColor: '#E3F2FD',

@@ -6,7 +6,10 @@ import { NavigationContainer } from "@react-navigation/native";
 import AppNavigator from "./src/navigation/AppNavigator"; // 👈 your full app routes
 
 const API_URL =
-  process.env.EXPO_PUBLIC_API_URL || Constants.expoConfig?.extra?.apiUrl;
+  Constants.expoConfig?.extra?.apiUrl ||
+  process.env.EXPO_PUBLIC_API_URL ||
+  "https://laughing-chainsaw-p54vpq5x945276p5-8000.app.github.dev";
+
 
 export default function App() {
   const [backendStatus, setBackendStatus] = useState(null);
@@ -15,6 +18,7 @@ export default function App() {
   useEffect(() => {
     const testBackend = async () => {
       try {
+        if (!API_URL) throw new Error("API_URL is undefined");
         const response = await fetch(`${API_URL}/health`);
         const data = await response.json();
         if (data?.status === "healthy") {

@@ -127,9 +127,8 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         minWidth: 80,
         elevation: 2,
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
+        boxShadow: '0px 2px 3.84px rgba(0, 0, 0, 0.25)',
+
     },
     statNumber: {
         fontSize: 24,
@@ -150,9 +149,9 @@ const styles = StyleSheet.create({
         marginBottom: 15,
         alignItems: 'center',
         elevation: 2,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 3,
+        boxShadow: '0px 2px 3.84px rgba(0, 0, 0, 0.25)',
+        flexDirection: 'row',
+        justifyContent: 'center',
     },
     primaryButton: {
         backgroundColor: '#198A48',

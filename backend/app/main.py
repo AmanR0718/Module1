@@ -14,7 +14,6 @@ from app.config import settings
 from app.database import connect_to_mongo, close_mongo_connection, create_indexes
 from app.routes import auth, farmers, chiefs, inventory, sync
 from app.utils import bcrypt_patch  # <-- must come before Passlib is used
-from passlib.context import CryptContext
 
 
 # ============================================
@@ -39,7 +38,6 @@ async def lifespan(app: FastAPI):
     """Manage startup and shutdown tasks"""
     logger.info("🚀 Starting Zambian Farmer Support System backend...")
 
-    # Retry MongoDB connection a few times if container isn't ready
     max_retries = 5
     for attempt in range(max_retries):
         try:
@@ -55,7 +53,7 @@ async def lifespan(app: FastAPI):
                 logger.error("❌ Could not connect to MongoDB after multiple attempts.")
                 raise
 
-    yield  # Application runs here
+    yield  # app runs here
 
     logger.info("🛑 Shutting down application...")
     await close_mongo_connection()
@@ -79,24 +77,16 @@ app = FastAPI(
 # ============================================
 # Middleware: CORS & Request Timing
 # ============================================
-allowed_origins = (
-    settings.ALLOWED_ORIGINS
-    if isinstance(settings.ALLOWED_ORIGINS, list)
-    else [o.strip() for o in str(settings.ALLOWED_ORIGINS).split(",") if o.strip()]
-)
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-
 @app.middleware("http")
 async def add_process_time_header(request: Request, call_next):
-    """Add processing time to every response"""
     start_time = time.time()
     try:
         response = await call_next(request)
@@ -123,7 +113,17 @@ async def internal_error_handler(request: Request, exc):
 
 
 # ============================================
-# Health Check & Root Endpoints
+# Routers
+# ============================================
+app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
+app.include_router(farmers.router, prefix="/api/farmers", tags=["Farmers"])
+app.include_router(chiefs.router, prefix="/api/chiefs", tags=["Chiefs"])
+app.include_router(inventory.router, prefix="/api/inventory", tags=["Inventory"])
+app.include_router(sync.router, prefix="/api/sync", tags=["Synchronization"])
+
+
+# ============================================
+# Health & Root Endpoints (Keep These Last)
 # ============================================
 @app.get("/health", tags=["Health"])
 async def health_check():
@@ -133,7 +133,6 @@ async def health_check():
         "service": settings.APP_NAME,
         "version": settings.VERSION
     }
-
 
 @app.get("/", tags=["Root"])
 async def root():
@@ -147,25 +146,14 @@ async def root():
 
 
 # ============================================
-# Routers
-# ============================================
-app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
-app.include_router(farmers.router, prefix="/api/farmers", tags=["Farmers"])
-app.include_router(chiefs.router, prefix="/api/chiefs", tags=["Chiefs"])
-app.include_router(inventory.router, prefix="/api/inventory", tags=["Inventory"])
-app.include_router(sync.router, prefix="/api/sync", tags=["Synchronization"])
-
-
-# ============================================
 # Uvicorn Entry Point
 # ============================================
 if __name__ == "__main__":
     import uvicorn
-
     uvicorn.run(
         "app.main:app",
         host="0.0.0.0",
-        port=settings.API_PORT if hasattr(settings, "API_PORT") else 8000,
+        port=getattr(settings, "API_PORT", 8000),
         reload=settings.DEBUG,
         log_level=settings.LOG_LEVEL.lower()
     )

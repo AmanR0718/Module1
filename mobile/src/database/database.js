@@ -1,20 +1,30 @@
 // src/utils/database.js
-import * as SQLite from "expo-sqlite";
 import { Platform } from "react-native";
+
+let SQLite; // lazy-loaded only when needed
+if (Platform.OS !== "web") {
+  try {
+    SQLite = require("expo-sqlite");
+  } catch (e) {
+    console.warn("⚠️ Expo SQLite not available:", e.message);
+  }
+}
+
 
 const DATABASE_NAME = "farmers.db";
 let database = null;
 
 /**
- * Initialize the SQLite database (only on mobile)
+ * Initialize the SQLite database safely (mobile only).
+ * On web, returns an in-memory mock implementation.
  */
 export const initializeDatabase = async () => {
   try {
     console.log("🗄️ Initializing SQLite database...");
 
-    // Web fallback (prevent crashes)
+    // ✅ Web fallback: prevent crashes when running in browser
     if (Platform.OS === "web") {
-      console.warn("⚠️ SQLite not supported on web — using in-memory mock DB.");
+      console.warn("⚠️ SQLite not supported on web — using mock in-memory DB.");
       database = {
         execAsync: async () => {},
         runAsync: async () => {},
@@ -26,15 +36,10 @@ export const initializeDatabase = async () => {
       return database;
     }
 
-    // ✅ Expo SDK 51+ async API
+    // ✅ Mobile (Android/iOS)
     database = await SQLite.openDatabaseAsync(DATABASE_NAME);
-
-    // Enable foreign key constraints
     await database.execAsync("PRAGMA foreign_keys = ON;");
-
-    // Create all tables
     await createTables();
-
     console.log("✅ Database initialized successfully");
     return database;
   } catch (error) {
